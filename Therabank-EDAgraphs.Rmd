@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+
+#Set working directory and read csv file
+```{r}
+
+setwd("C:/Data Mining")
+loandata = read.csv('Thera Bank2.csv')
+str(loandata)
+summary(loandata)
+# 18 NA values in Family members column. 
+```
+```{r}
+# NA in Familymembers column have been treated 
+
+# We observe 52 rows with negative values in "Experience in years" column
+# Assumption is that this might have been typo in error,hence we replace those values with absolute values
+Negative_experience<-subset(loandata,loandata$Experience..in.years.<0)
+print(nrow(Negative_experience))
+loandata$Experience..in.years.<-abs(loandata$Experience..in.years.)
+```
+```{r}
+summary(loandata)
+```
+
+#Convert credit to categorical variable
+```{r}
+loandata$Personal.Loan = as.factor(loandata$Personal.Loan)
+loandata$Education = as.factor(loandata$Education)
+loandata$Securities.Account = as.factor(loandata$Securities.Account)
+loandata$CreditCard = as.factor(loandata$CreditCard)
+loandata$CD.Account = as.factor(loandata$CD.Account)
+loandata$Online = as.factor(loandata$Online)
+#loandata$Familymembers = as.factor(loandata$Familymembers)
+names(loandata)
+str(loandata)
+```
+
+#Find Baseline Y class %
+```{r}
+prop.table(table(loandata$Personal.Loan))
+```
+
+```{r}
+
+boxplot(loandata$Experience..in.years.)
+boxplot(loandata$Income..in.K.month.)
+boxplot(loandata$Age..in.years.)
+boxplot(loandata$CCAvg)
+boxplot(loandata$Mortgage)
+summary(loandata)
+# Histogram of the catogorical variables 
+histogram(loandata$Securities.Account,main="Securities.Account")
+histogram(loandata$Personal.Loan,main="Personal.Loan")
+histogram(loandata$CD.Account,main="CD.Account")
+histogram(loandata$Online,main="online",)
+histogram(loandata$CreditCard,main="CreditCard")
+histogram(loandata$Education,main="Education")
+```
+
+
+### Exploratory data analysis - boxplot
+```{r}
+library(ggplot2)
+
+ggplot(data=loandata, aes(x=loandata$Personal.Loan, y=loandata$Age, fill=loandata$Personal.Loan))+geom_boxplot()
+
+ggplot(data=loandata, aes(x=loandata$Personal.Loan, y=loandata$Income, fill=loandata$Personal.Loan))+geom_boxplot()
+
+
+library(dplyr)
+
+
+ggplot(data=loandata, aes(x=loandata$Personal.Loan, y=loandata$CCAvg, fill=loandata$Personal))+geom_boxplot()
+
+attach(loandata)
+ggplot(data=loandata, aes(x=Personal.Loan, y=Mortgage, fill=Personal.Loan))+geom_boxplot()
+
+ggplot(data=loandata, aes(x=Personal.Loan, y=Securities.Account, fill=Personal.Loan))+geom_boxplot()
+
+ggplot(data=loandata, aes(x=Personal.Loan, y=CD.Account, fill=Personal.Loan))+geom_boxplot()
+
+ggplot(data=loandata, aes(x=Personal.Loan, y=Online, fill=Personal.Loan))+geom_boxplot()
+
+ggplot(data=loandata, aes(x=Personal.Loan, y=CreditCard, fill=Personal.Loan))+geom_boxplot()
+
+```
+
+
+#Stacked bar plot for categorical variables
+```{r}
+
+ggplot(loandata, aes(fill=Personal.Loan, x=Education, y=as.numeric(Education))) +
+  geom_bar( stat="identity")
+
+ggplot(loandata, aes(fill=Personal.Loan, x=Mortgage, y=as.numeric(Mortgage))) +
+  geom_bar( stat="identity")
+
+ggplot(loandata, aes(fill=Personal.Loan, x=Income..in.K.month., y=as.numeric(Income..in.K.month.))) +geom_bar( stat="identity")
+
+ggplot(loandata, aes(fill=Personal.Loan, x=Experience..in.years., y=as.numeric(Experience..in.years.))) +geom_bar( stat="identity")
+
+ggplot(loandata, aes(fill=Personal.Loan, x=Age..in.years., y=as.numeric(Age..in.years.))) +
+  geom_bar( stat="identity")
+
+ggplot(loandata, aes(fill=Personal.Loan, x=CCAvg, y=as.numeric(CCAvg))) +
+  geom_bar( stat="identity")
+
+
+
+```
+
+

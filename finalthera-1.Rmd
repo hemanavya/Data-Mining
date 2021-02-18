@@ -1,0 +1,256 @@
+---l
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+#install.packages("readxl")
+library(readxl)
+therabank=read_excel(file.choose())
+attach(therabank)
+sum(is.na(therabank))
+
+
+boxplot(`Family members`)
+```
+
+#KNN imptuation - Missing value treatment
+```{r}
+#nstall.packages("VIM")
+library(VIM)
+?kNN()
+newdata=kNN(therabank,variable = c("Family members"),k=7)
+summary(newdata)
+sum(is.na(newdata))
+write.csv(newdata,"C:\\Users\\HemaNavya\\Desktop\\knnimputed.csv")
+str(newdata)
+
+```
+
+# converting multiple variables to factors
+```{r}
+newdata1=newdata[,-c(1,5,15)] # removing ID , ZIPCode and addition logicalcolumn of KNN imputation
+newdata1$Education = factor(newdata1$Education, levels = c("1", "2", "3"), order = TRUE)
+newdata1$`Personal Loan`=as.factor(newdata1$`Personal Loan`)
+newdata1$`Securities Account`=as.factor(newdata1$`Securities Account`)
+newdata1$CreditCard=as.factor(newdata1$CreditCard)
+newdata1$Online=as.factor(newdata1$Online)
+newdata1$`CD Account`=as.factor(newdata1$`CD Account`)
+str(newdata1)
+```
+```{r}
+ ##renaming Columns
+  library(stringr)
+  names(newdata1)=str_replace_all(names(newdata1), c(" " = "."))
+  names(newdata1)
+```
+
+# converting Negative values in experience column to positive 
+```{r}
+nrow(newdata1[newdata1$`Experience.(in.years)`<0,])
+newdata1$`Experience.(in.years)` = abs(newdata1$`Experience.(in.years)`)
+nrow(newdata1[newdata1$`Experience.(in.years)`<0,])
+```
+#Univaraite analysis
+```{r}
+boxplot(newdata1)
+boxplot(newdata1[,c(1:3)],horizontal = TRUE)
+boxplot(newdata1[,c(4:6)],horizontal = TRUE)
+boxplot(newdata1[,c(7)],horizontal = TRUE)
+
+```
+
+```{r}
+  ###caTools is required for sample.split function
+  #install.packages("caTools")
+  library(caTools)
+
+###Split the dataset into train and test
+set.seed(1000)
+Thera_Split = sample.split(newdata1, SplitRatio = 0.75)
+Thera_Train = subset(newdata1, Thera_Split == TRUE)
+Thera_Test = subset(newdata1, Thera_Split == FALSE)
+nrow(Thera_Train)
+nrow(Thera_Test)
+```
+
+
+```{r}
+###Check if the same proportion of Personal Loan values are maintained in train and test data
+prop.table(table(Thera_Train$`Personal Loan`))
+prop.table(table(Thera_Test$`Personal Loan`))
+dim(Thera_Train)
+dim(Thera_Test)
+```
+```{r}
+###Number of Variables to be considered (mtry)
+mtryRF1 = sqrt(12)
+```
+```{r}
+###Random Forest model
+##ntree is the number of decision trees
+#install.packages("randomForest")
+library(randomForest)
+names(Thera_Train)=make.names(names(Thera_Train))
+names(Thera_Train)
+
+Thera_Data_RF1 = randomForest(Thera_Train$Personal.Loan ~ .,data = Thera_Train, mtry = mtryRF1,ntree = 501,importance = TRUE, set.seed(420))
+print(Thera_Data_RF1)
+
+##Importance of Variables
+
+importance(Thera_Data_RF1)
+##Plotting the model
+plot(Thera_Data_RF1)
+
+```
+
+
+
+
+```{r}
+#### Model by changing the cutoff
+Thera_Data_RF2 = randomForest(Thera_Train$Personal.Loan ~ .,data = Thera_Train, mtry = mtryRF1,ntree = 501,importance = TRUE, cutoff = c(0.7,0.3),set.seed(420))
+print(Thera_Data_RF2)
+```
+
+
+```{r}
+varImpPlot(Thera_Data_RF2)
+```
+
+
+```{r}
+###Tuning the model
+
+Thera_RF_tune = tuneRF(x = Thera_Train[, -c(8)],y = Thera_Train$Personal.Loan, mtryStart = mtryRF1,stepFactor = 1.5, ntreeTry = 501, improve = 0.0001,trace = TRUE, plot = TRUE, doBest = TRUE, importance = TRUE,)
+print(Thera_RF_tune)
+##Hence mtry=3.5
+```
+
+```{r}
+###Variable Importance Plot
+#importance(Thera_Data_RF3)
+varImpPlot(Thera_RF_tune)
+```
+
+
+```{r}
+###Train Data prediction
+Thera_Train$PredictClass = predict(Thera_Data_RF2,newdata = Thera_Train,type = "class")
+Thera_Data_tabtrain=with(Thera_Train,table(Thera_Train$Personal.Loan,Thera_Train$PredictClass))
+Thera_Data_tabtrain
+```
+```{r}
+##Test Data Prediction
+names(Thera_Test)=make.names(names(Thera_Test))
+Thera_Test$PredictClass = predict(object = Thera_Data_RF2, newdata = Thera_Test,type = "class")
+Thera_Data_tabtest = with(Thera_Test,table(Thera_Test$Personal.Loan,Thera_Test$PredictClass))
+Thera_Data_tabtest
+```
+
+
+```{r}
+##Model Performance - Train Data
+TN_train = Thera_Data_tabtrain[1,1]
+TP_train = Thera_Data_tabtrain[2,2]
+FN_train = Thera_Data_tabtrain[2,1]
+FP_train = Thera_Data_tabtrain[1,2]
+
+##Accuracy
+train_acc = (TN_train+TP_train)/(TN_train+TP_train+FN_train+FP_train)
+train_acc
+
+##Sensitivity
+train_sens = TP_train/(TP_train+FN_train)
+train_sens
+
+##Specificity
+train_spec = TN_train/(TN_train+FP_train)
+train_spec
+
+```
+```{r}
+##Model performance of Test Data
+TN_test = Thera_Data_tabtest[1,1]
+TP_test = Thera_Data_tabtest[2,2]
+FN_test = Thera_Data_tabtest[2,1]
+FP_test = Thera_Data_tabtest[1,2]
+
+test_acc = (TN_test+TP_test)/(TN_test+TP_test+FN_test+FP_test)
+test_acc
+
+test_sens = TP_test/(TP_test+FN_test)
+test_sens
+
+
+test_spec = TN_test/(TN_test+FP_test)
+test_spec
+```
+##performance of Tuned RF model
+```{r}
+names(Thera_Test)=make.names(names(Thera_Test))
+Thera_Test$tunpred = predict(object = Thera_RF_tune, newdata = Thera_Test,type = "class")
+Thera_tune_test = with(Thera_Test,table(Thera_Test$Personal.Loan,Thera_Test$tunpred))
+
+##Model performance of Test Data
+TN_tune = Thera_tune_test[1,1]
+TP_tune = Thera_tune_test[2,2]
+FN_tune = Thera_tune_test[2,1]
+FP_tune = Thera_tune_test[1,2]
+
+tune_acc = (TN_tune+TP_tune)/(TN_tune+TP_tune+FN_tune+FP_tune)
+tune_acc
+
+tune_sens = TP_tune/(TP_tune+FN_tune)
+tune_sens
+
+
+tune_spec = TN_tune/(TN_tune+FP_tune)
+tune_spec
+```
+
+#ROC curve and AUC - RF2 model
+```{r}
+library(pROC)
+Thera_Train$predict.score=predict(Thera_Data_RF2,Thera_Train, type = "prob")
+Thera_Train$predict.score
+roc_obj = roc(Thera_Train$Personal.Loan, Thera_Train$predict.score[,2])
+
+
+plot(roc_obj, print.auc = T)
+
+
+Thera_Test$predict.score=predict(Thera_Data_RF2,Thera_Test, type = "prob")
+Thera_Test$predict.score
+roc_obj = roc(Thera_Test$Personal.Loan, Thera_Test$predict.score[,2])
+
+
+plot(roc_obj, print.auc = T)
+```
+```
+
+###CART
+```{r}
+
+##Decision Tree
+###Fully Grown Tree
+#install.packages('rpart')
+#install.packages('rpart.plot')
+library(rpart)
+library(rpart.plot)
+tree_full = rpart(formula = Personal.Loan~., data = Thera_Train, cp=-1, minsplit=2, minbucket=1)
+Thera_Tree_Full
+rpart.plot(Thera_Tree_Full)
+```
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

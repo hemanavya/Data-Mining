@@ -1,0 +1,357 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+datacart=read.csv(file.choose())
+```
+
+
+```{r}
+library(stringr)
+  names(datacart)=str_replace_all(names(datacart), c(" " = "."))
+  names(datacart)
+  datacart_new=datacart[,-c(1,2,6)] # removing ID , ZIPCode 
+  datacart_new$Education = factor(datacart_new$Education, levels = c("1", "2", "3"), order = TRUE)
+datacart_new$Personal.Loan=as.factor(datacart_new$Personal.Loan)
+datacart_new$Securities.Account=as.factor(datacart_new$Securities.Account)
+datacart_new$CreditCard=as.factor(datacart_new$CreditCard)
+datacart_new$Online=as.factor(datacart_new$Online)
+datacart_new$CD.Account=as.factor(datacart_new$CD.Account)
+str(datacart_new)
+
+```
+
+
+```{r}
+library(caTools)
+set.seed(1000)
+Cart_Split = sample.split(datacart_new, SplitRatio = 0.8)
+Cart_Train = subset(datacart_new, Cart_Split == TRUE)
+Cart_Test = subset(datacart_new, Cart_Split == FALSE)
+nrow(Cart_Train)
+nrow(Cart_Test)
+```
+
+
+```{r}
+###Check if the same proportion of Personal Loan values are maintained in train and test data
+prop.table(table(Cart_Train$Personal.Loan))
+prop.table(table(Cart_Test$Personal.Loan))
+dim(Cart_Train)
+dim(Cart_Test)
+```
+```{r}
+
+library(rpart)
+library(rpart.plot)
+set.seed(420)
+
+tree_full = rpart(formula = Personal.Loan~., data = Cart_Train, cp=-1, minsplit=2, minbucket=1)
+rpart.plot(tree_full, cex=0.4)
+print(tree_full)
+
+boxcols <- c("palegreen3", "orange")[tree_full$frame$yval]
+
+par(xpd=TRUE)
+prp(tree_full, faclen = 0, cex = 0.3, extra = 1, box.col = boxcols)
+```
+
+```{r}
+#predict on train and test set
+## Predict using the CART model ## train
+
+Cart_Train$predict.class=predict(tree_full,newdata = Cart_Train,type = "class")
+Cart_Train$predict.score=predict(tree_full,Cart_Train)
+
+## Creating the confusion matrix
+tabtrain=with(Cart_Train,table(Personal.Loan,predict.class))
+tabtrain
+
+TN_train = tabtrain[1,1]
+TP_train = tabtrain[2,2]
+FN_train = tabtrain[2,1]
+FP_train = tabtrain[1,2]
+
+train_acc = (TN_train+TP_train)/(TN_train+TP_train+FN_train+FP_train)
+train_acc
+
+train_sens = TP_train/(TP_train+FN_train)
+train_sens
+
+
+train_spec = TN_train/(TN_train+FP_train)
+train_spec
+```
+
+```{r}
+## Predict using the CART model ## test
+Cart_Test$predict.class=predict(tree_full,Cart_Test,type="class")
+Cart_Test$predict.score=predict(tree_full,Cart_Test)
+
+## Creating the confusion matrix
+tabtest=with(Cart_Test,table(Personal.Loan,predict.class))
+tabtest
+
+TN_test = tabtest[1,1]
+TP_test = tabtest[2,2]
+FN_test = tabtest[2,1]
+FP_test = tabtest[1,2]
+
+test_acc = (TN_test+TP_test)/(TN_test+TP_test+FN_test+FP_test)
+test_acc
+
+test_sens = TP_test/(TP_test+FN_test)
+test_sens
+
+
+test_spec = TN_test/(TN_test+FP_test)
+test_spec
+```
+
+```{r}
+df_results_train = data.frame(train_acc, train_sens, train_spec)
+names(df_results_train) = c("ACC", "SENS", "SPEC")
+df_results_test = data.frame(test_acc, test_sens, test_spec)
+names(df_results_test) = c("ACC", "SENS", "SPEC")
+
+?rbind
+df_fin =rbind(df_results_train, df_results_test)
+row.names(df_fin) = c('tree_full_train', 'tree_full_test')
+df_fin
+
+```
+```{r}
+#remove predicted score and class before running other models
+
+Cart_Train$predict.class = NULL
+Cart_Train$predict.score = NULL
+Cart_Test$predict.class = NULL
+Cart_Test$predict.score = NULL
+```
+
+
+#Pruning using minbucket and minsplit
+```{r}
+
+set.seed(420)
+
+
+tree_manual_prune=rpart(formula = Cart_Train$Personal.Loan ~ ., data =Cart_Train
+                        , method="class",control = rpart.control(minsplit = 100, minbucket = 10))
+
+
+
+rpart.plot(tree_manual_prune, cex=0.8)
+```
+```{r}
+
+#predict on train and test set
+## Predict using the CART model ## train
+
+Cart_Train$predict.class=predict(tree_manual_prune,newdata = Cart_Train,type = "class")
+Cart_Train$predict.score=predict(tree_manual_prune,Cart_Train)
+
+## Creating the confusion matrix
+tabtrain=with(Cart_Train,table(Personal.Loan,predict.class))
+tabtrain
+
+TN_train = tabtrain[1,1]
+TP_train = tabtrain[2,2]
+FN_train = tabtrain[2,1]
+FP_train = tabtrain[1,2]
+
+train_acc = (TN_train+TP_train)/(TN_train+TP_train+FN_train+FP_train)
+train_acc
+
+train_sens = TP_train/(TP_train+FN_train)
+train_sens
+
+
+train_spec = TN_train/(TN_train+FP_train)
+train_spec
+```
+
+```{r}
+## Predict using the CART model ## test
+Cart_Test$predict.class=predict(tree_manual_prune,Cart_Test,type="class")
+Cart_Test$predict.score=predict(tree_manual_prune,Cart_Test)
+
+## Creating the confusion matrix
+tabtest=with(Cart_Test,table(Personal.Loan,predict.class))
+tabtest
+
+TN_test = tabtest[1,1]
+TP_test = tabtest[2,2]
+FN_test = tabtest[2,1]
+FP_test = tabtest[1,2]
+
+test_acc = (TN_test+TP_test)/(TN_test+TP_test+FN_test+FP_test)
+test_acc
+
+test_sens = TP_test/(TP_test+FN_test)
+test_sens
+
+
+test_spec = TN_test/(TN_test+FP_test)
+test_spec
+```
+
+```{r}
+df_results_train = data.frame(train_acc, train_sens, train_spec)
+names(df_results_train) = c("ACC", "SENS", "SPEC")
+df_results_test = data.frame(test_acc, test_sens, test_spec)
+names(df_results_test) = c("ACC", "SENS", "SPEC")
+
+
+df_fin =rbind(df_results_train, df_results_test)
+row.names(df_fin) = c('tree_train','tree_test')
+df_fin
+
+```
+```{r}
+#remove predicted score and class before running other models
+Cart_Train$predict.class = NULL
+Cart_Train$predict.score = NULL
+Cart_Test$predict.class = NULL
+Cart_Test$predict.score = NULL
+```
+
+```{r}
+
+printcp(tree_full)
+plotcp(tree_full)
+
+bestcp=tree_full$cptable[which.min(tree_full$cptable[,"xerror"]),"CP"]
+bestcp
+
+
+
+ptree=prune(tree_full,cp=bestcp)
+print(ptree)
+
+rpart.plot(ptree, cex = 0.8)
+```
+
+```{r}
+
+
+#predict on train and test set
+## Predict using the CART model ## train
+
+Cart_Train$predict.class=predict(ptree,newdata = Cart_Train,type = "class")
+Cart_Train$predict.score=predict(ptree,Cart_Train)
+
+## Creating the confusion matrix
+tabtrain=with(Cart_Train,table(Personal.Loan,predict.class))
+tabtrain
+
+TN_train = tabtrain[1,1]
+TP_train = tabtrain[2,2]
+FN_train = tabtrain[2,1]
+FP_train = tabtrain[1,2]
+
+train_acc = (TN_train+TP_train)/(TN_train+TP_train+FN_train+FP_train)
+train_acc
+
+train_sens = TP_train/(TP_train+FN_train)
+train_sens
+
+
+train_spec = TN_train/(TN_train+FP_train)
+train_spec
+```
+```{r}
+## Predict using the CART model ## test
+Cart_Test$predict.class=predict(ptree,Cart_Test,type="class")
+Cart_Test$predict.score=predict(ptree,Cart_Test)
+
+## Creating the confusion matrix
+tabtest=with(Cart_Test,table(Personal.Loan,predict.class))
+tabtest
+
+TN_test = tabtest[1,1]
+TP_test = tabtest[2,2]
+FN_test = tabtest[2,1]
+FP_test = tabtest[1,2]
+
+test_acc = (TN_test+TP_test)/(TN_test+TP_test+FN_test+FP_test)
+test_acc
+
+test_sens = TP_test/(TP_test+FN_test)
+test_sens
+
+
+test_spec = TN_test/(TN_test+FP_test)
+test_spec
+```
+
+```{r}
+df_results_train = data.frame(train_acc, train_sens, train_spec)
+names(df_results_train) = c("ACC", "SENS", "SPEC")
+df_results_test = data.frame(test_acc, test_sens, test_spec)
+names(df_results_test) = c("ACC", "SENS", "SPEC")
+
+?rbind
+df_fin =rbind(df_results_train, df_results_test)
+row.names(df_fin) = c('ptree_train', 'ptree_test')
+df_fin
+```
+
+
+```{r}
+boxcols <- c("palegreen3", "orange")[tree_full$frame$yval]
+
+par(xpd=TRUE)
+prp(ptree, faclen = 0, cex = 0.6, extra = 1, box.col = boxcols)
+```
+```{r}
+#Variable importance
+library(caret)
+
+ptree$variable.importance
+
+df_cart=data.frame(round(ptree$variable.importance,2))
+df_cart
+write.csv(df_cart,"varimpcart.csv")
+```
+```{r}
+
+Cart_Train$predict.class = NULL
+Cart_Train$predict.score = NULL
+Cart_Test$predict.class = NULL
+Cart_Test$predict.score = NULL
+```
+
+#Calculate AUC and KS with best model (ptree)
+```{r}
+## Predict using the CART model
+Cart_Train$predict.class=predict(tree_manual_prune,Cart_Train,type="class")
+Cart_Train$predict.score=predict(tree_manual_prune,Cart_Train)
+
+View(Cart_Train)
+
+Cart_Train$predict.class=predict(ptree,Cart_Train,type="class")
+Cart_Train$predict.score=predict(ptree,Cart_Train)
+```
+
+```{r}
+library(pROC)
+roc_obj = roc(Cart_Train$Personal.Loan, Cart_Train$predict.score[,2])
+
+
+plot(roc_obj, print.auc = T)
+```
+```
+
+```{r}
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
